@@ -6,7 +6,7 @@
 
 [package]
 name = "ibkit-py"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/racetozero/ibkit"

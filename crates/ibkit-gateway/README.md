@@ -234,12 +234,12 @@ For an unattended controller, use `resume`, `poll_recovery`, and `recover` with 
 ## Docker
 
 ```sh
-docker build --target runtime -t ibkit-rs:0.1.0 .
+docker build --target runtime -t ibkit-rs:0.0.1 .
 docker volume create ibkit-state
 docker run -d --name ibkit --restart unless-stopped \
   --env-file /secure/ibkit.env \
   -v ibkit-state:/var/lib/ibkit \
-  -p 127.0.0.1:4002:4004 --stop-timeout 45 ibkit-rs:0.1.0
+  -p 127.0.0.1:4002:4004 --stop-timeout 45 ibkit-rs:0.0.1
 docker logs -f ibkit
 ```
 
@@ -253,7 +253,7 @@ BuildKit selects the matching vendor installer for amd64 or arm64. Rust builds u
 
 ```sh
 docker buildx build --platform linux/amd64,linux/arm64 --target runtime \
-  -t registry.example/ibkit-rs:0.1.0 --push .
+  -t registry.example/ibkit-rs:0.0.1 --push .
 ```
 
 `GATEWAY_CHANNEL` accepts `latest` or `stable`. Supply `--build-arg GATEWAY_SHA256=<expected-hash>` to check a vendor installer. The image records the downloaded hash at `/opt/ibgateway/installer.sha256`. The vendor's latest URL can change; record and check the hash for repeatable deployments.
@@ -290,7 +290,7 @@ scripts/check-chart.sh
 uv run scripts/check-tui.py
 docker build --target verify -t ibkit-verify .
 docker run --rm ibkit-verify
-scripts/container-smoke.sh ibkit-rs:0.1.0
+scripts/container-smoke.sh ibkit-rs:0.0.1
 ```
 
 Install the prebuilt cargo-nextest tool before running these checks. The JVM check needs a desktop display or `xvfb-run -a`. It uses an independent Swing test application and checks paper login, IB Key, modal UI access, settings, warning acceptance, export, restart, takeover, incoming connections, and shutdown confirmation. Failure scenarios include repeated mobile prompts, rejected sessions, account tasks, security cards, unknown dialogs, stalled re-login, and token expiry. The ordinary nextest profile excludes the JVM binary. JVM tests are explicitly ignored by plain cargo test; they never count missing prerequisites as success.

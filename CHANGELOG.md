@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.0.1
 
 Long-running Gateway service, control API and SDKs:
 
@@ -342,8 +342,6 @@ references, FIX Implementation Manual Revision 2025-001, TWS API 10.52.01):
   tick bar operators, missing `util` functions, `IBDefaults`, `IBC`,
   `Watchdog`, WSH subscriptions, `OAuth2Config`, FIX TLS and builders,
   `reqConfig`/`updateConfig`.
-
-## 0.1.0
 
 * `ibkit-tws`: TWS API text protocol for server versions 157 to 200: field
   codec, frame buffer, encoders for all 81 request types, decoder for all 84

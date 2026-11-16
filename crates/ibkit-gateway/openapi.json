@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "ibkit control API",
-    "version": "0.1.0",
+    "version": "0.0.1",
     "description": "Health, status, commands, settings, credentials, metrics and events of one ibkit controller. Commands are queued in order through the same command queue as the CLI; each takes effect within a second. Every path except health and this document needs `Authorization: Bearer <token>`. Terminate TLS in front of the controller when it listens beyond loopback."
   },
   "components": {

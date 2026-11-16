@@ -54,7 +54,7 @@ chart-check:
 
 # Build the ibkit container image.
 image:
-    @docker build --target runtime -t ibkit-rs:0.1.0 .
+    @docker build --target runtime -t ibkit-rs:0.0.1 .
 
 # Package the Helm chart into dist/.
 chart:

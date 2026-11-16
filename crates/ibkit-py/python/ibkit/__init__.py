@@ -88,7 +88,7 @@ from .ticker import (
 )
 from .web import AsyncWebClient, OAuth2Config, OAuthConfig, WebClient, WsClient
 
-__version__: str = '0.1.0'
+__version__: str = '0.0.1'
 __version_info__: tuple[int, ...] = tuple(int(p) for p in __version__.split('.'))
 
 # The public names; ``from ibkit import *`` imports these.
