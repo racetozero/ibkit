@@ -30,6 +30,11 @@ ibkit gateway tui
 That command opens a terminal workspace where you enter your login, press `r`,
 and approve the login on your phone. Gateway is then ready for your code on port 4002.
 
+<img width="1822" height="1185" alt="image" src="https://github.com/user-attachments/assets/23306746-071b-4f9c-8208-26cf051cd30f" />
+<img width="1822" height="1185" alt="image" src="https://github.com/user-attachments/assets/9b94acb3-b3e6-4a01-866b-a2d342c12b60" />
+<img width="746" height="596" alt="image" src="https://github.com/user-attachments/assets/4e0e9e21-259d-4a2b-bb70-ffe6815597ab" />
+
+
 ## Install
 
 ### The `ibkit` command
