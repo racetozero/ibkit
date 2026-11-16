@@ -204,8 +204,9 @@ install_release() {
     command_exists tar || fail "tar is not installed, and it unpacks $archive_name. Install tar."
     tar -xzf "$temporary_directory/$archive_name" -C "$temporary_directory"
     unpacked="$temporary_directory/ibkit-cli-$target"
-    [ -f "$unpacked/ibkit" ] && [ -f "$unpacked/$agent_name" ] ||
+    if [ ! -f "$unpacked/ibkit" ] || [ ! -f "$unpacked/$agent_name" ]; then
         fail "$archive_name does not hold ibkit and $agent_name. Report this release at https://github.com/$REPOSITORY/issues."
+    fi
     probe="$("$unpacked/ibkit" --version 2>&1)" ||
         fail "the ibkit $version binary cannot run on this system ($probe). Update the system (glibc 2.35 or newer on Linux), or use the container image."
 

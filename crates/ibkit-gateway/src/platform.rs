@@ -280,6 +280,21 @@ mod windows {
         }
     }
 
+    // SAFETY: a Win32 handle can be used and closed from any thread.
+    unsafe impl Send for Owned {}
+
+    /// The open job handle of each session this controller started. Windows
+    /// drops a kernel object's name when its last handle closes, even while
+    /// processes run in the job, so `open_job` finds a job only while a
+    /// handle stays open.
+    static JOBS: std::sync::Mutex<Vec<(String, Owned)>> = std::sync::Mutex::new(Vec::new());
+
+    fn forget_job(session: &str) {
+        JOBS.lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .retain(|(name, _)| name != session);
+    }
+
     impl Drop for Owned {
         fn drop(&mut self) {
             // SAFETY: the handle is open and owned by this value.
@@ -333,6 +348,9 @@ mod windows {
                 );
             }
             resume_threads(pid)?;
+            JOBS.lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push((session.to_owned(), job));
         }
         Ok(pid)
     }
@@ -365,7 +383,7 @@ mod windows {
             return false;
         };
         // SAFETY: the buffer is a JOBOBJECT_BASIC_ACCOUNTING_INFORMATION.
-        unsafe {
+        let alive = unsafe {
             let mut info: JOBOBJECT_BASIC_ACCOUNTING_INFORMATION = std::mem::zeroed();
             QueryInformationJobObject(
                 job.0,
@@ -375,7 +393,11 @@ mod windows {
                 std::ptr::null_mut(),
             ) != 0
                 && info.ActiveProcesses > 0
+        };
+        if !alive {
+            forget_job(session);
         }
+        alive
     }
 
     /// End the session's processes. Windows has no polite signal for them:
@@ -454,17 +476,28 @@ mod windows {
 
     /// Replace `path` with `file`. A scanner or the indexer can hold `path`
     /// for a moment, so the rename is retried for up to a second.
-    pub fn persist(mut file: tempfile::NamedTempFile, path: &Path) -> std::io::Result<()> {
-        for _ in 0..20 {
-            match file.persist(path) {
-                Ok(_) => return Ok(()),
-                Err(error) => {
-                    file = error.file;
+    ///
+    /// `std::fs::rename` uses POSIX rename semantics where Windows has them,
+    /// so it replaces a file that a reader holds open with delete sharing (as
+    /// Rust, and most runtimes, open files). tempfile's `persist` uses
+    /// `MoveFileExW`, which fails with access denied in that case.
+    pub fn persist(file: tempfile::NamedTempFile, path: &Path) -> std::io::Result<()> {
+        let temporary = file.into_temp_path();
+        let mut attempts = 0;
+        loop {
+            match fs::rename(&temporary, path) {
+                Ok(()) => {
+                    // The file now lives at `path`: do not delete it on drop.
+                    let _ = temporary.keep();
+                    return Ok(());
+                }
+                Err(error) if attempts >= 20 => return Err(error),
+                Err(_) => {
+                    attempts += 1;
                     std::thread::sleep(Duration::from_millis(50));
                 }
             }
         }
-        file.persist(path).map(drop).map_err(|error| error.error)
     }
 
     /// The user this controller runs as, for error messages.

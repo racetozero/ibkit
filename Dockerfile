@@ -37,7 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && rm -rf /var/lib/apt/lists/*
 RUN set -eu; case "$TARGETARCH" in amd64) vendor_arch=x64 ;; arm64) vendor_arch=arm ;; *) echo 'Use amd64 or arm64 for the Gateway image.' >&2; exit 1 ;; esac; \
     case "$GATEWAY_CHANNEL" in latest|stable) ;; *) echo 'Use latest or stable for GATEWAY_CHANNEL.' >&2; exit 1 ;; esac; \
-    curl -fL --retry 3 "https://download2.interactivebrokers.com/installers/ibkit/${GATEWAY_CHANNEL}-standalone/ibkit-${GATEWAY_CHANNEL}-standalone-linux-${vendor_arch}.sh" -o /tmp/gateway.sh; \
+    curl -fL --retry 3 "https://download2.interactivebrokers.com/installers/ibgateway/${GATEWAY_CHANNEL}-standalone/ibgateway-${GATEWAY_CHANNEL}-standalone-linux-${vendor_arch}.sh" -o /tmp/gateway.sh; \
     sha256sum /tmp/gateway.sh > /tmp/gateway-installer.sha256; \
     case "$TARGETARCH" in amd64) wanted=${GATEWAY_SHA256_AMD64:-$GATEWAY_SHA256} ;; arm64) wanted=${GATEWAY_SHA256_ARM64:-$GATEWAY_SHA256} ;; esac; \
     if [ -n "$wanted" ]; then echo "$wanted  /tmp/gateway.sh" | sha256sum -c - \
