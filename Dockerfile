@@ -24,7 +24,7 @@ RUN set -eu; rust_target=$(cat /out/rust-target); \
     CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc \
     CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
       cargo test --locked --target "$rust_target" -p ibkit-cli --test jvm --no-run --message-format=json > /tmp/test-build.json; \
-    jvm_tests=$(sed -n 's/.*"executable":"\([^"]*\)".*/\1/p' /tmp/test-build.json); \
+    jvm_tests=$(grep '"kind":\["test"\]' /tmp/test-build.json | sed -n 's/.*"executable":"\([^"]*\)".*/\1/p'); \
     test -n "$jvm_tests"; cp "$jvm_tests" /out/jvm-tests
 
 FROM debian:bookworm-slim AS gateway
