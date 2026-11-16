@@ -19,11 +19,13 @@ RUN set -eu; rust_target=$(cat /out/rust-target); \
     cp "target/$rust_target/release/ibkit" "target/$rust_target/release/libibkit_gateway_agent.so" /out/
 
 FROM build AS test-build
+# Cargo's output layout changes between releases, so ask Cargo where the test binary is.
 RUN set -eu; rust_target=$(cat /out/rust-target); \
     CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc \
     CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
-      cargo test --locked --target "$rust_target" -p ibkit-cli --test jvm --no-run; \
-    find "target/$rust_target/debug/deps" -maxdepth 1 -type f -name 'jvm-*' -executable -exec cp '{}' /out/jvm-tests \;
+      cargo test --locked --target "$rust_target" -p ibkit-cli --test jvm --no-run --message-format=json > /tmp/test-build.json; \
+    jvm_tests=$(grep '"kind":\["test"\]' /tmp/test-build.json | sed -n 's/.*"executable":"\([^"]*\)".*/\1/p'); \
+    test -n "$jvm_tests"; cp "$jvm_tests" /out/jvm-tests
 
 FROM debian:bookworm-slim AS gateway
 ARG TARGETARCH
@@ -37,7 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && rm -rf /var/lib/apt/lists/*
 RUN set -eu; case "$TARGETARCH" in amd64) vendor_arch=x64 ;; arm64) vendor_arch=arm ;; *) echo 'Use amd64 or arm64 for the Gateway image.' >&2; exit 1 ;; esac; \
     case "$GATEWAY_CHANNEL" in latest|stable) ;; *) echo 'Use latest or stable for GATEWAY_CHANNEL.' >&2; exit 1 ;; esac; \
-    curl -fL --retry 3 "https://download2.interactivebrokers.com/installers/ibkit/${GATEWAY_CHANNEL}-standalone/ibkit-${GATEWAY_CHANNEL}-standalone-linux-${vendor_arch}.sh" -o /tmp/gateway.sh; \
+    curl -fL --retry 3 "https://download2.interactivebrokers.com/installers/ibgateway/${GATEWAY_CHANNEL}-standalone/ibgateway-${GATEWAY_CHANNEL}-standalone-linux-${vendor_arch}.sh" -o /tmp/gateway.sh; \
     sha256sum /tmp/gateway.sh > /tmp/gateway-installer.sha256; \
     case "$TARGETARCH" in amd64) wanted=${GATEWAY_SHA256_AMD64:-$GATEWAY_SHA256} ;; arm64) wanted=${GATEWAY_SHA256_ARM64:-$GATEWAY_SHA256} ;; esac; \
     if [ -n "$wanted" ]; then echo "$wanted  /tmp/gateway.sh" | sha256sum -c - \

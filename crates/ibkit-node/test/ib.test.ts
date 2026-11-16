@@ -181,12 +181,13 @@ test('a kept-up-to-date bar list changes its last bar and grows', async () => {
 
 test('errors arrive as typed classes', async () => {
   expect(() => ib.placeOrder(Stock('AAPL'), { totalQuantity: 'many' as never })).toThrow(InvalidArgumentError);
-  await expect(new IB().connect({ port: 1, clientId: 9, timeout: 1 })).rejects.toBeInstanceOf(ConnectionError);
+  // Windows retries a refused localhost connect for about 2 s before failing.
+  await expect(new IB().connect({ port: 1, clientId: 9, timeout: 5 })).rejects.toBeInstanceOf(ConnectionError);
   const raising = await new IB().connect({ port: tws.port, clientId: 2, requestTimeout: 5, raiseRequestErrors: true });
   // XYZ has no security definition: with raiseRequestErrors the request fails.
   await expect(raising.reqContractDetails(Stock('XYZ', 'SMART', 'USD'))).rejects.toBeInstanceOf(RequestError);
   raising.disconnect();
-});
+}, 15_000);
 
 test('the low-level client has every native request and receives messages', async () => {
   for (const name of native.clientRequestNames()) {
