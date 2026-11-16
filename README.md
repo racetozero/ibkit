@@ -205,6 +205,30 @@ dialogs, sets the API options and reports Gateway's state. The `ibkit` command
 around it restarts Gateway when something goes wrong and keeps the API port
 ready for your code.
 
+### Use a separate username for automation
+
+IBKR allows only one brokerage session per username across TWS, IB Gateway,
+Client Portal, IBKR Mobile and the Web API. If your automation logs in with your
+primary username, opening the mobile app or the web portal ends the automated
+session, and the automated login can log you out. Make a second username just
+for API workflows:
+
+1. Log in to the IBKR Client Portal, open the user menu (top right) and choose
+   **Settings**.
+2. Under **Account Settings**, open **Users & Access Rights** and click **+** next
+   to **Users**.
+3. Answer **Yes** to "Is this a secondary user for the primary account holder?",
+   pick a username and password, and allow **TWS** trading access.
+4. Sign any pending forms under the notification bell, then wait for IBKR to
+   approve the user (usually about a day).
+5. Log in once with the new username to finish setup, and give it two-factor
+   authentication (see `IB_TOTP_SECRET` below).
+
+Market data subscriptions belong to each username, so subscribe on the new one
+if your code needs live data. Use this username for `IB_USERNAME` and keep your
+primary login for manual trading. See IBKR's
+[Managing Multiple Sessions](https://www.interactivebrokers.com/docs/web-api/authentication/multiple-sessions).
+
 ### On your desktop
 
 ```sh
@@ -385,9 +409,12 @@ macOS); numbers vary by machine:
 | encode PLACE_ORDER              | 4.8 M msg/s              |
 | FIX parse ExecutionReport       | 7.7 M msg/s              |
 | socket → decode → Ticker update | 10.9 M msg/s             |
+| `ibkit gateway run` memory      | 7 MB                     |
 
 For comparison, ib_async's decoder alone handles 2.05 M TICK_PRICE msg/s on the
 same machine (Python 3.15, no ticker update).
+
+`ibkit gateway run` uses 7 MB of memory when benchmarked.
 
 ## Development
 
@@ -408,6 +435,18 @@ just image       # build the Gateway container image
 
 The tests run against in-process fakes of TWS, FIX and Gateway; nothing
 connects to IB.
+
+## In memory of Ewald de Wit
+
+ibkit stands on the shoulders of [ib_insync](https://github.com/erdewit/ib_insync),
+which Ewald de Wit wrote and maintained for years. ib_insync showed that the TWS
+API could be easy to use, with a linear style of programming, an `IB` object that
+stays in sync with TWS or Gateway, and a fully asynchronous core for those who
+needed it. Many people learned to trade programmatically with his library, and
+its ideas live on in [ib_async](https://github.com/ib-api-reloaded/ib_async) and
+in this project.
+
+Ewald passed away on 11 March 2024, after a serious illness. Thank you, Ewald.
 
 ## License
 
