@@ -1,0 +1,25 @@
+[package]
+name = "ibkit-gateway-core"
+description = "Configuration, events, and dialog policy for Rust IB Gateway automation"
+version.workspace = true
+edition.workspace = true
+license = "Apache-2.0"
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+chrono-tz.workspace = true
+hmac.workspace = true
+schemars.workspace = true
+serde.workspace = true
+sha1.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true

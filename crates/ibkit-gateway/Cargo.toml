@@ -1,0 +1,52 @@
+[package]
+name = "ibkit-gateway"
+description = "IB Gateway supervisor: login, recovery, control API and settings"
+version.workspace = true
+edition.workspace = true
+license = "Apache-2.0"
+repository.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+paper-tests = ["dep:ibapi", "dep:clap"]
+
+[[bin]]
+name = "ibkit-gateway-paper-check"
+path = "src/bin/paper_check.rs"
+required-features = ["paper-tests"]
+
+[dependencies]
+anyhow.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+chrono-tz.workspace = true
+clap = { workspace = true, optional = true }
+ibkit-gateway-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["process", "signal", "fs"] }
+uuid.workspace = true
+tempfile.workspace = true
+ibapi = { version = "=5.7.0", optional = true }
+toml.workspace = true
+parking_lot.workspace = true
+reqwest.workspace = true
+schemars.workspace = true
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio", "ws"] }
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1", default-features = false, features = ["std", "process"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_JobObjects",
+  "Win32_System_Threading",
+  "Win32_System_Diagnostics_ToolHelp",
+] }
+
+[dev-dependencies]
+ibkit-gateway-client.workspace = true

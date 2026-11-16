@@ -1,0 +1,96 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/ibkit-tws",
+  "crates/ibkit",
+  "crates/ibkit-web",
+  "crates/ibkit-fix",
+  "crates/ibkit-bench",
+  "crates/ibkit-gateway-core",
+  "crates/ibkit-gateway",
+  "crates/ibkit-gateway-client",
+  "crates/ibkit-cli",
+]
+
+# The PyO3 crate is deliberately outside the workspace. Building its test
+# harness links libpython, which does not belong in `cargo test --workspace`.
+# Build it with maturin (see `just py-test`).
+exclude = ["crates/ibkit-py"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.89"
+repository = "https://github.com/racetozero/ibkit"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+
+[workspace.dependencies]
+ibkit-tws = { path = "crates/ibkit-tws", version = "0.1.0" }
+ibkit = { path = "crates/ibkit", version = "0.1.0" }
+ibkit-fix = { path = "crates/ibkit-fix", version = "0.1.0" }
+ibkit-gateway-core = { path = "crates/ibkit-gateway-core", version = "0.1.0" }
+ibkit-gateway = { path = "crates/ibkit-gateway", version = "0.1.0" }
+ibkit-gateway-client = { path = "crates/ibkit-gateway-client", version = "0.1.0" }
+anyhow = "1"
+base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+chrono-tz = "0.10"
+clap = { version = "4", features = ["derive", "env", "string"] }
+fast-float2 = "0.2"
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+hmac = "0.12"
+itoa = "1"
+jni = "0.21"
+jvmti-sys = "0.1"
+memchr = "2"
+num-bigint = "0.4"
+parking_lot = "0.12"
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "cookies", "rustls-tls"] }
+rsa = { version = "0.9", features = ["sha2"] }
+ryu = "1"
+schemars = { version = "1.2", features = ["chrono04"] }
+self-replace = "1"
+semver = "1"
+serde = { version = "1", features = ["derive"] }
+# Insertion order everywhere, so JSON output does not depend on which
+# crates a build unifies (the Python and Node bindings need it for dicts).
+serde_json = { version = "1", features = ["preserve_order"] }
+sha1 = "0.10"
+sha2 = "0.10"
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "io-util", "sync", "time", "macros"] }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
+toml = "0.9"
+tracing = "0.1"
+uuid = { version = "1", features = ["v4"] }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+debug = "line-tables-only"
+
+# The ibkit command and its JVM agent ship in archives and container images;
+# keep them small.
+[profile.release.package.ibkit-cli]
+strip = "symbols"
+
+# The profile that cargo-dist builds release archives with.
+[profile.dist]
+inherits = "release"
+
+[profile.dist.package.ibkit-cli]
+strip = "symbols"
+
+[profile.bench]
+inherits = "release"

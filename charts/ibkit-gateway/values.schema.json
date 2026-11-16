@@ -1,0 +1,258 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "credentials": {
+      "type": "object",
+      "required": [
+        "existingSecret",
+        "usernameKey",
+        "passwordKey"
+      ],
+      "properties": {
+        "existingSecret": {
+          "type": "string",
+          "minLength": 1
+        },
+        "usernameKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "passwordKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "totpSecretKey": {
+          "type": "string"
+        }
+      }
+    },
+    "gateway": {
+      "type": "object",
+      "properties": {
+        "tradingMode": {
+          "enum": [
+            "paper",
+            "live"
+          ]
+        },
+        "apiPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "forwardPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "incomingConnection": {
+          "enum": [
+            "manual",
+            "accept",
+            "reject"
+          ]
+        },
+        "region": {
+          "enum": [
+            "america",
+            "europe",
+            "asia"
+          ]
+        },
+        "autoRecover": {
+          "type": "boolean"
+        },
+        "recoveryAttempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "recoveryDelaySeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "apiProbeIntervalSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "apiFailureTimeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        },
+        "readOnlyApi": {
+          "type": "boolean"
+        },
+        "apiLog": {
+          "type": "boolean"
+        },
+        "allowRemoteApi": {
+          "type": "boolean"
+        },
+        "bypassOrderPrecautions": {
+          "type": "boolean"
+        },
+        "acceptOrderWarnings": {
+          "type": "boolean"
+        },
+        "exportLogs": {
+          "type": "boolean"
+        },
+        "existingSession": {
+          "enum": [
+            "refuse",
+            "takeover"
+          ]
+        },
+        "restartTime": {
+          "type": "string",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        },
+        "timezone": {
+          "type": "string",
+          "minLength": 1
+        },
+        "initializationTimeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        },
+        "softRestartTimeoutSeconds": {
+          "type": "integer",
+          "minimum": 120,
+          "maximum": 86400
+        },
+        "shutdownTimeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600
+        },
+        "secondFactorTimeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 180
+        },
+        "secondFactorAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3
+        },
+        "unknownDialogTimeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "passkeyAuthenticate": {
+          "type": "boolean"
+        },
+        "javaHeapMb": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 256,
+          "maximum": 65536
+        },
+        "masterClientId": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "recoveryMaxDelaySeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        },
+        "apiAllowedSources": {
+          "type": "string"
+        },
+        "maxLoginFailures": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "dismissPasswordExpiryWarning": {
+          "type": "boolean"
+        },
+        "closedownAt": {
+          "type": "string",
+          "pattern": "^$|^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]* +([01][0-9]|2[0-3]):[0-5][0-9]$"
+        },
+        "coldRestartAt": {
+          "type": "string",
+          "pattern": "^$|^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]* +([01][0-9]|2[0-3]):[0-5][0-9]$"
+        }
+      }
+    },
+    "controlApi": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "existingSecret": {
+          "type": "string"
+        },
+        "tokenKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "serviceMonitor": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "interval": {
+              "type": "string",
+              "pattern": "^[0-9]+(ms|s|m|h)$"
+            }
+          }
+        }
+      }
+    },
+    "alerts": {
+      "type": "object",
+      "properties": {
+        "existingSecret": {
+          "type": "string"
+        },
+        "urlKey": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "vnc": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "existingSecret": {
+          "type": "string"
+        },
+        "passwordKey": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

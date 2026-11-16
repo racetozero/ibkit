@@ -1,0 +1,79 @@
+# Copy this file to config.toml. Paths are relative to the working directory.
+executable = "/opt/ibgateway/ibgateway"
+agent = "/usr/local/lib/libibkit_gateway_agent.so"
+state_dir = "/var/lib/ibkit/state"
+settings_dir = "/var/lib/ibkit/settings"
+trading_mode = "paper"
+auto_login = true
+api_port = 4002
+# These defaults match IBAutomater. Set true/false to match your account policy.
+read_only_api = false
+api_log = true
+allow_remote_api = false
+incoming_connection = "manual"
+# Forward container traffic to Gateway's loopback API. Do not expose publicly.
+api_listen = "0.0.0.0:4004"
+# Retry transient faults without a limit (0); the delay doubles from
+# recovery_delay_secs up to recovery_max_delay_secs. Faults that need an
+# operator (wrong password, account tasks) halt the controller instead.
+auto_recover = true
+recovery_attempts = 0
+recovery_delay_secs = 60
+recovery_max_delay_secs = 1800
+api_probe_interval_secs = 30
+api_failure_timeout_secs = 180
+region = "america"
+bypass_order_precautions = true
+accept_order_warnings = true
+existing_session = "refuse"
+export_logs = false
+restart_time = "23:45"
+initialization_timeout_secs = 900
+soft_restart_timeout_secs = 600
+shutdown_timeout_secs = 30
+second_factor_timeout_secs = 150
+second_factor_attempts = 3
+# Unknown dialogs are never clicked; one that blocks login this long fails it.
+unknown_dialog_timeout_secs = 120
+# Mobile Authenticator (TOTP): base32 secret in this variable or file. Unset:
+# second-factor login waits for IB Key approval on the phone.
+totp_secret_env = "IB_TOTP_SECRET"
+# totp_secret_file = "/run/secrets/totp"
+passkey_authenticate = false
+# java_heap_mb = 1536
+# master_client_id = 0
+username_env = "IB_USERNAME"
+password_env = "IB_PASSWORD"
+# username_file = "/run/secrets/username"
+# password_file = "/run/secrets/password"
+manage_display = true
+# Control API (REST and WebSocket). Off unless control_listen is set; the
+# bearer token comes from IBKIT_CONTROL_TOKEN or control_token_file.
+# control_listen = "0.0.0.0:5800"
+# control_token_file = "/run/ibkit-control/token"
+# JSON POST on down, recovered, halted, exhausted and controller_failed. The
+# body has a text field for Slack and Mattermost incoming webhooks.
+# alert_webhook_url = "https://hooks.example.com/ibkit"
+# Let the control API turn on live trading, remote or writable API access,
+# accepted incoming connections, bypassed precautions and api_listen. The API
+# cannot change this key.
+control_api_full_access = false
+# Gateway sees every forwarded API client as 127.0.0.1, so its trusted-IP
+# list does not apply. Limit the sources of api_listen here (addresses or
+# CIDR ranges); behind Docker port publishing the source can be the bridge
+# address, so also publish the port on loopback (-p 127.0.0.1:4004:4004).
+# api_allowed_sources = "127.0.0.1,10.0.0.0/8"
+# Consecutive logins that end without Ready after an unknown login dialog or
+# an unanswered second factor, before retries stop (an IBKR lock-out guard);
+# 0: no limit.
+max_login_failures = 10
+# Click OK on "Your password will expire in N day(s)" and report it.
+dismiss_password_expiry_warning = true
+# Weekly local times: pause Gateway until restart, and log in again at a time
+# when someone can approve IB Key (IBC ClosedownAt and ColdRestartTime).
+# closedown_at = "Fri 23:00"
+# cold_restart_at = "Sun 07:05"
+# VNC view of the virtual display (x11vnc) for account tasks; keep it on
+# loopback and use an SSH tunnel or kubectl port-forward.
+# vnc_listen = "127.0.0.1:5900"
+# vnc_password_file = "/run/ibkit-vnc/password"

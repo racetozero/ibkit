@@ -1,0 +1,26 @@
+[package]
+name = "ibkit-fix"
+description = "FIX 4.2 engine (codec, session layer, async TCP/TLS initiator and acceptor) with Interactive Brokers order helpers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ibkit-tws.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+itoa.workspace = true
+memchr.workspace = true
+ryu.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

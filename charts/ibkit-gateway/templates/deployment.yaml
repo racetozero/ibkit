@@ -1,0 +1,151 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ibkit.name" . }}
+  labels:
+    {{- include "ibkit.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  # Avoid two Gateway sessions using the same account or settings volume.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "ibkit.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ibkit.selector" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ add .Values.gateway.shutdownTimeoutSeconds 15 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: gateway
+          image: {{ printf "%s:%s" .Values.image.repository (default .Chart.AppVersion .Values.image.tag) | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: TZ
+              value: {{ .Values.gateway.timezone | quote }}
+            {{- with .Values.alerts.existingSecret }}
+            - name: IBKIT_ALERT_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ . | quote }}
+                  key: {{ $.Values.alerts.urlKey | quote }}
+            {{- end }}
+          ports:
+            - name: api
+              containerPort: {{ .Values.gateway.forwardPort }}
+            {{- if .Values.controlApi.enabled }}
+            - name: control
+              containerPort: {{ .Values.controlApi.port }}
+            {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          startupProbe:
+            exec:
+              command: [ibkit, gateway, health, --kind, live]
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            exec:
+              command: [ibkit, gateway, health, --kind, live]
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command: [ibkit, gateway, health, --kind, ready]
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 2
+          volumeMounts:
+            - name: config
+              mountPath: /etc/ibkit
+              readOnly: true
+            - name: credentials
+              mountPath: /run/ibkit-credentials
+              readOnly: true
+            {{- if .Values.controlApi.enabled }}
+            - name: control-token
+              mountPath: /run/ibkit-control
+              readOnly: true
+            {{- end }}
+            {{- if .Values.vnc.enabled }}
+            - name: vnc-password
+              mountPath: /run/ibkit-vnc
+              readOnly: true
+            {{- end }}
+            - name: state
+              mountPath: /var/lib/ibkit
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "ibkit.name" . }}
+        - name: credentials
+          secret:
+            secretName: {{ required "Set credentials.existingSecret to an existing Secret with username and password keys." .Values.credentials.existingSecret }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.credentials.usernameKey | quote }}
+                path: username
+              - key: {{ .Values.credentials.passwordKey | quote }}
+                path: password
+              {{- with .Values.credentials.totpSecretKey }}
+              - key: {{ . | quote }}
+                path: totp
+              {{- end }}
+        {{- if .Values.controlApi.enabled }}
+        - name: control-token
+          secret:
+            secretName: {{ required "Set controlApi.existingSecret to a Secret that holds the control API token." .Values.controlApi.existingSecret }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.controlApi.tokenKey | quote }}
+                path: token
+        {{- end }}
+        {{- if .Values.vnc.enabled }}
+        - name: vnc-password
+          secret:
+            secretName: {{ required "Set vnc.existingSecret to a Secret that holds the VNC password." .Values.vnc.existingSecret }}
+            defaultMode: 0440
+            items:
+              - key: {{ .Values.vnc.passwordKey | quote }}
+                path: password
+        {{- end }}
+        - name: state
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (include "ibkit.name" .) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

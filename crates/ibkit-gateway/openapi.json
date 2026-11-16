@@ -1,0 +1,1719 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ibkit control API",
+    "version": "0.1.0",
+    "description": "Health, status, commands, settings, credentials, metrics and events of one ibkit controller. Commands are queued in order through the same command queue as the CLI; each takes effect within a second. Every path except health and this document needs `Authorization: Bearer <token>`. Terminate TLS in front of the controller when it listens beyond loopback."
+  },
+  "components": {
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "properties": {
+          "live": {
+            "type": "boolean",
+            "description": "The controller runs and saved its status in the last 5 seconds."
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "Gateway is logged in and its API socket answered a handshake."
+          },
+          "state": {
+            "$ref": "#/components/schemas/State"
+          },
+          "controller_pid": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "live",
+          "ready",
+          "state",
+          "controller_pid"
+        ],
+        "description": "`GET /v1/health` and `GET /v1/health/ready` (no token needed)."
+      },
+      "State": {
+        "type": "string",
+        "enum": [
+          "starting",
+          "logging_in",
+          "awaiting_second_factor",
+          "configuring",
+          "ready",
+          "restarting",
+          "stopping",
+          "exited",
+          "failed",
+          "recovering",
+          "halted",
+          "paused"
+        ],
+        "description": "Controller and Gateway state. `failed`: Gateway stopped on a fault in\none session, and recovery may follow. `halted`: Gateway is stopped after\na fault that automatic recovery must not retry; the controller stays up\nand waits for restart, reload or stop. `paused`: an operator (the `pause`\ncommand or `closedown_at`) stopped Gateway; the controller stays up,\nalso across its own restarts, until `restart`."
+      },
+      "Status": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "string"
+          },
+          "controller_pid": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "$ref": "#/components/schemas/State"
+          },
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentStatus"
+            }
+          },
+          "last_start_result": {
+            "$ref": "#/components/schemas/StartResult"
+          },
+          "recovery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecoveryState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Automatic recovery phase. With state `halted`, `blocked` waits for an\noperator and `exhausted` for the hourly attempt budget."
+          },
+          "process_group": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0,
+            "description": "Process group of the Gateway launcher that this controller started.\nA replacement controller only tests whether the group still exists.",
+            "default": null
+          }
+        },
+        "required": [
+          "session",
+          "controller_pid",
+          "at",
+          "state",
+          "agents",
+          "last_start_result",
+          "recovery",
+          "process_group"
+        ],
+        "description": "Controller status, saved to `state_dir/status.json` every 500 ms and\nreturned by `GET /v1/status`."
+      },
+      "AgentStatus": {
+        "type": "object",
+        "properties": {
+          "session": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "$ref": "#/components/schemas/State"
+          },
+          "result": {
+            "$ref": "#/components/schemas/StartResult"
+          },
+          "max_heap_mb": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0,
+            "description": "The JVM's maximum heap (Runtime.maxMemory) in MiB."
+          }
+        },
+        "required": [
+          "session",
+          "pid",
+          "at",
+          "state",
+          "result",
+          "max_heap_mb"
+        ]
+      },
+      "StartResult": {
+        "type": "object",
+        "properties": {
+          "error_code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "error_message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error_code",
+          "error_message"
+        ]
+      },
+      "ErrorCode": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "None",
+              "ProcessStartFailed",
+              "IbGatewayVersionNotInstalled",
+              "JavaNotFound",
+              "JavaException",
+              "LoginFailed",
+              "ExistingSessionDetected",
+              "SecurityDialogDetected",
+              "TwoFactorConfirmationTimeout",
+              "InitializationTimeout",
+              "UnsupportedVersion",
+              "ApiSupportNotAvailable",
+              "RestartedProcessNotFound",
+              "UnknownMessageWindowDetected",
+              "SoftRestartTimeout",
+              "LoginFailedAccountTasksRequired",
+              "InvalidConfiguration",
+              "AgentDisconnected",
+              "AuthenticationRequired",
+              "ConnectionLost",
+              "ApiConnectionUnavailable",
+              "LogExportTimeout",
+              "AuthenticationNotAnswered"
+            ]
+          },
+          {
+            "type": "string",
+            "const": "TotpRejected",
+            "description": "IBKR rejected the Mobile Authenticator codes. Never retried: more\nwrong codes can lock the account."
+          },
+          {
+            "type": "string",
+            "const": "LoginRetriesExhausted",
+            "description": "Consecutive logins that never reached Ready reached\n`max_login_failures`. Never retried automatically."
+          }
+        ],
+        "description": "Values 0..=15 match QuantConnect IBAutomater's ErrorCode values."
+      },
+      "RecoveryState": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "phase": {
+                "type": "string",
+                "const": "idle"
+              }
+            },
+            "required": [
+              "phase"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "phase": {
+                "type": "string",
+                "const": "running"
+              }
+            },
+            "required": [
+              "phase"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "phase": {
+                "type": "string",
+                "const": "awaiting_agent"
+              },
+              "deadline": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "phase",
+              "deadline"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "phase": {
+                "type": "string",
+                "const": "waiting"
+              },
+              "retry_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/ErrorCode"
+              }
+            },
+            "required": [
+              "phase",
+              "retry_at",
+              "reason"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "phase": {
+                "type": "string",
+                "const": "exhausted"
+              }
+            },
+            "required": [
+              "phase"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "phase": {
+                "type": "string",
+                "const": "blocked"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/ErrorCode"
+              }
+            },
+            "required": [
+              "phase",
+              "reason"
+            ]
+          }
+        ]
+      },
+      "Config": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "executable": {
+            "type": "string"
+          },
+          "agent": {
+            "type": "string"
+          },
+          "state_dir": {
+            "type": "string",
+            "default": "state"
+          },
+          "settings_dir": {
+            "type": "string",
+            "default": "state/settings"
+          },
+          "trading_mode": {
+            "$ref": "#/components/schemas/TradingMode",
+            "default": "paper"
+          },
+          "auto_login": {
+            "type": "boolean",
+            "default": true
+          },
+          "api_port": {
+            "type": "integer",
+            "format": "uint16",
+            "minimum": 0,
+            "maximum": 65535,
+            "default": 4002
+          },
+          "read_only_api": {
+            "type": "boolean",
+            "default": false
+          },
+          "api_log": {
+            "type": "boolean",
+            "default": true
+          },
+          "allow_remote_api": {
+            "type": "boolean",
+            "default": false
+          },
+          "incoming_connection": {
+            "$ref": "#/components/schemas/IncomingConnection",
+            "default": "manual"
+          },
+          "api_listen": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "auto_recover": {
+            "type": "boolean",
+            "default": true
+          },
+          "recovery_attempts": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0,
+            "description": "Retry limit for automatic recovery; 0 retries without limit.",
+            "default": 0
+          },
+          "recovery_delay_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "description": "First retry delay; each further retry doubles it up to\n`recovery_max_delay_secs`.",
+            "default": 60
+          },
+          "recovery_max_delay_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "default": 1800
+          },
+          "api_probe_interval_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "default": 30
+          },
+          "api_failure_timeout_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "default": 180
+          },
+          "region": {
+            "$ref": "#/components/schemas/Region",
+            "default": "america"
+          },
+          "bypass_order_precautions": {
+            "type": "boolean",
+            "default": true
+          },
+          "accept_order_warnings": {
+            "type": "boolean",
+            "default": true
+          },
+          "existing_session": {
+            "$ref": "#/components/schemas/ExistingSession",
+            "default": "refuse"
+          },
+          "export_logs": {
+            "type": "boolean",
+            "default": false
+          },
+          "restart_time": {
+            "type": "string",
+            "description": "24-hour local system time. The container sets TZ explicitly.",
+            "default": "23:45"
+          },
+          "initialization_timeout_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "default": 900
+          },
+          "soft_restart_timeout_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "default": 600
+          },
+          "shutdown_timeout_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "default": 30
+          },
+          "second_factor_timeout_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "default": 150
+          },
+          "second_factor_attempts": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0,
+            "maximum": 255,
+            "default": 3
+          },
+          "unknown_dialog_timeout_secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0,
+            "description": "How long an unknown modal dialog may block authentication before\nthe login fails. Unknown dialogs are never clicked.",
+            "default": 120
+          },
+          "username_env": {
+            "type": "string",
+            "default": "IB_USERNAME"
+          },
+          "password_env": {
+            "type": "string",
+            "default": "IB_PASSWORD"
+          },
+          "username_file": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "password_file": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "totp_secret_env": {
+            "type": "string",
+            "description": "Environment variable with the base32 Mobile Authenticator (TOTP)\nsecret. When it is absent and no file is set, second-factor login\nwaits for IB Key approval on the phone.",
+            "default": "IB_TOTP_SECRET"
+          },
+          "totp_secret_file": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "passkey_authenticate": {
+            "type": "boolean",
+            "description": "Press Authenticate on a passkey (WebAuthn) prompt. An authenticator\nbeside Gateway must complete it; otherwise a passkey prompt fails.",
+            "default": false
+          },
+          "java_heap_mb": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0,
+            "description": "Maximum Java heap in MiB (Gateway's default is 768).",
+            "default": null
+          },
+          "master_client_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0,
+            "description": "Master API client ID: the client that receives all orders.",
+            "default": null
+          },
+          "manage_display": {
+            "type": "boolean",
+            "default": false
+          },
+          "control_listen": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Control API (REST and WebSocket) listener; `None` disables it.",
+            "default": null
+          },
+          "control_token_env": {
+            "type": "string",
+            "description": "Environment variable with the control API bearer token.",
+            "default": "IBKIT_CONTROL_TOKEN"
+          },
+          "control_token_file": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "alert_webhook_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "HTTP(S) URL that receives a JSON POST when Gateway goes down, comes\nback, halts for an operator, or the controller fails. The body has\na `text` field, so Slack and Mattermost incoming webhooks accept it.",
+            "default": null
+          },
+          "dismiss_password_expiry_warning": {
+            "type": "boolean",
+            "description": "Click OK on \"Your password will expire in N day(s)\" and report it as\nan event. Off: the warning fails the login, as before IBC's\nDismissPasswordExpiryWarning.",
+            "default": true
+          },
+          "max_login_failures": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0,
+            "description": "Consecutive logins that end without Ready, for a fault where another\nlogin can lock the account (an unknown login dialog, unanswered or\nrejected second factor), before retries stop; 0 has no limit.",
+            "default": 10
+          },
+          "api_allowed_sources": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Comma-separated source addresses or CIDR ranges that may connect to\n`api_listen`, for example `10.0.0.0/8,192.168.1.20`. Absent: any.\nBehind Docker port publishing the source can be the bridge address.",
+            "default": null
+          },
+          "control_api_full_access": {
+            "type": "boolean",
+            "description": "Let the control API set risky values: live trading, remote API\naccess, accepting incoming connections, a writable API, bypassed\norder precautions, and `api_listen`. Only the file, flags and\nvariables can turn this on.",
+            "default": false
+          },
+          "vnc_listen": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Serve the virtual display over VNC (x11vnc) on this address, for\naccount tasks and unknown dialogs. Needs `manage_display` and\n`vnc_password_file`. Keep it on loopback and use a tunnel.",
+            "default": null
+          },
+          "vnc_password_file": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "default": null
+          },
+          "closedown_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Weekly time (local system time) at which the controller pauses\nGateway, for example `Fri 23:00` (IBC ClosedownAt).",
+            "default": null
+          },
+          "cold_restart_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Weekly time (local system time) of a cold restart with a new login,\nfor example `Sun 07:05` (IBC ColdRestartTime): it moves the weekly\nre-authentication to a time when an operator can approve it.",
+            "default": null
+          }
+        },
+        "required": [
+          "executable",
+          "agent",
+          "state_dir",
+          "settings_dir",
+          "trading_mode",
+          "auto_login",
+          "api_port",
+          "read_only_api",
+          "api_log",
+          "allow_remote_api",
+          "incoming_connection",
+          "api_listen",
+          "auto_recover",
+          "recovery_attempts",
+          "recovery_delay_secs",
+          "recovery_max_delay_secs",
+          "api_probe_interval_secs",
+          "api_failure_timeout_secs",
+          "region",
+          "bypass_order_precautions",
+          "accept_order_warnings",
+          "existing_session",
+          "export_logs",
+          "restart_time",
+          "initialization_timeout_secs",
+          "soft_restart_timeout_secs",
+          "shutdown_timeout_secs",
+          "second_factor_timeout_secs",
+          "second_factor_attempts",
+          "unknown_dialog_timeout_secs",
+          "username_env",
+          "password_env",
+          "username_file",
+          "password_file",
+          "totp_secret_env",
+          "totp_secret_file",
+          "passkey_authenticate",
+          "java_heap_mb",
+          "master_client_id",
+          "manage_display",
+          "control_listen",
+          "control_token_env",
+          "control_token_file",
+          "alert_webhook_url",
+          "dismiss_password_expiry_warning",
+          "max_login_failures",
+          "api_allowed_sources",
+          "control_api_full_access",
+          "vnc_listen",
+          "vnc_password_file",
+          "closedown_at",
+          "cold_restart_at"
+        ]
+      },
+      "TradingMode": {
+        "type": "string",
+        "enum": [
+          "live",
+          "paper"
+        ]
+      },
+      "IncomingConnection": {
+        "type": "string",
+        "enum": [
+          "manual",
+          "accept",
+          "reject"
+        ]
+      },
+      "Region": {
+        "type": "string",
+        "enum": [
+          "america",
+          "europe",
+          "asia"
+        ]
+      },
+      "ExistingSession": {
+        "type": "string",
+        "enum": [
+          "refuse",
+          "takeover"
+        ]
+      },
+      "Event": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "session": {
+            "type": "string"
+          },
+          "pid": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "at",
+          "session",
+          "pid"
+        ],
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "started"
+              }
+            },
+            "required": [
+              "event"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "state_changed"
+              },
+              "state": {
+                "$ref": "#/components/schemas/State"
+              }
+            },
+            "required": [
+              "event",
+              "state"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "output"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "event",
+              "message"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "error"
+              },
+              "result": {
+                "$ref": "#/components/schemas/StartResult"
+              }
+            },
+            "required": [
+              "event",
+              "result"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "restarted"
+              }
+            },
+            "required": [
+              "event"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "exited"
+              },
+              "code": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              }
+            },
+            "required": [
+              "event",
+              "code"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "dialog"
+              },
+              "kind": {
+                "$ref": "#/components/schemas/Dialog"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "event",
+              "kind",
+              "title"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "recovery_scheduled"
+              },
+              "attempt": {
+                "type": "integer",
+                "format": "uint32",
+                "minimum": 0
+              },
+              "retry_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/ErrorCode"
+              }
+            },
+            "required": [
+              "event",
+              "attempt",
+              "retry_at",
+              "reason"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "api_unavailable"
+              }
+            },
+            "required": [
+              "event"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "api_restored"
+              }
+            },
+            "required": [
+              "event"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "event": {
+                "type": "string",
+                "const": "halted"
+              },
+              "reason": {
+                "$ref": "#/components/schemas/ErrorCode"
+              },
+              "exhausted": {
+                "type": "boolean"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "event",
+              "reason",
+              "exhausted",
+              "message"
+            ],
+            "description": "Gateway stopped and the controller waits: for an operator after a\nfault that a new login cannot repair, or for the hourly attempt\nbudget (`exhausted`)."
+          }
+        ]
+      },
+      "Dialog": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "login",
+              "configuration",
+              "second_factor",
+              "second_factor_selection",
+              "security_code",
+              "login_failed",
+              "server_disconnected",
+              "too_many_attempts",
+              "password_notice",
+              "account_tasks",
+              "paper_warning",
+              "unsupported_version",
+              "existing_session",
+              "relogin",
+              "advisor_warning",
+              "exit_settings",
+              "api_unavailable",
+              "restart_confirmation",
+              "token_expired",
+              "restart_now",
+              "market_data",
+              "ssl",
+              "order_warning",
+              "view_logs",
+              "export_filename",
+              "export_finished",
+              "unknown",
+              "incoming_connection",
+              "login_handoff",
+              "exit_confirmation",
+              "api_port_change",
+              "newer_version",
+              "login_error",
+              "not_available",
+              "tip_of_the_day",
+              "shutdown_progress"
+            ]
+          },
+          {
+            "type": "string",
+            "const": "second_factor_code",
+            "description": "Second factor prompt for a Mobile Authenticator (TOTP) code."
+          },
+          {
+            "type": "string",
+            "const": "passkey",
+            "description": "Second factor prompt for a passkey (WebAuthn) device."
+          },
+          {
+            "type": "string",
+            "const": "connecting",
+            "description": "\"Attempt N: connecting to server\" progress. Clicking OK cancels login."
+          },
+          {
+            "type": "string",
+            "const": "password_expiry_warning",
+            "description": "\"Your password will expire in N day(s)\" (a Password Notice that\nstill allows login)."
+          },
+          {
+            "type": "string",
+            "const": "hotkey_confirmation",
+            "description": "\"Are you sure you want to execute ... ctrl-alt-# hotkey action?\",\nthe confirmation of a reconnect shortcut."
+          },
+          {
+            "type": "string",
+            "const": "connection_lost",
+            "description": "\"Your connection was lost. Would you like to re-login?\""
+          }
+        ]
+      },
+      "Alert": {
+        "type": "object",
+        "properties": {
+          "alert": {
+            "$ref": "#/components/schemas/AlertKind"
+          },
+          "text": {
+            "type": "string",
+            "description": "One readable line, for chat webhooks (Slack, Mattermost)."
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "session": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/State"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "alert",
+          "text",
+          "at",
+          "session",
+          "state",
+          "reason",
+          "message"
+        ],
+        "description": "The JSON body that the controller POSTs to `alert_webhook_url`."
+      },
+      "AlertKind": {
+        "oneOf": [
+          {
+            "type": "string",
+            "const": "down",
+            "description": "A login or a running Gateway failed. Automatic recovery may follow."
+          },
+          {
+            "type": "string",
+            "const": "recovered",
+            "description": "Gateway is logged in again after `down`, `halted` or `exhausted`."
+          },
+          {
+            "type": "string",
+            "const": "halted",
+            "description": "Gateway stopped after a fault that a new login cannot repair. An\noperator must correct the cause and send `restart`."
+          },
+          {
+            "type": "string",
+            "const": "exhausted",
+            "description": "The hourly recovery budget is used up; recovery continues when it\npermits."
+          },
+          {
+            "type": "string",
+            "const": "controller_failed",
+            "description": "The controller itself stopped with an error."
+          }
+        ],
+        "description": "Why an alert was sent."
+      },
+      "ApiError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "description": "The body of every error response."
+      },
+      "ControlRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "control": {
+            "$ref": "#/components/schemas/Control"
+          }
+        },
+        "required": [
+          "control"
+        ],
+        "description": "`POST /v1/control`."
+      },
+      "Control": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "stop",
+              "restart",
+              "soft_restart",
+              "export_logs"
+            ]
+          },
+          {
+            "type": "string",
+            "const": "reconnect_account",
+            "description": "Reconnect Gateway's account (server) connection without a restart."
+          },
+          {
+            "type": "string",
+            "const": "reconnect_data",
+            "description": "Reconnect market data farms (TWS; Gateway ignores it)."
+          },
+          {
+            "type": "string",
+            "const": "reload",
+            "description": "Read the configuration again and start a new session with it."
+          },
+          {
+            "type": "string",
+            "const": "pause",
+            "description": "Stop Gateway and keep the controller up until `restart`, also after\nthe controller itself restarts (for example a container restart)."
+          }
+        ]
+      },
+      "CredentialsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "description": "`PUT /v1/credentials`."
+      },
+      "TotpRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "secret": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret"
+        ],
+        "description": "`PUT /v1/totp`: the base32 Mobile Authenticator secret."
+      },
+      "ConfigUpdate": {
+        "description": "Configuration keys (as GET /v1/config returns them) and new values. null removes a value set through the API, so the file or default applies. state_dir and keys set by flags or IBKIT_* variables are refused.",
+        "type": "object",
+        "additionalProperties": {
+          "type": [
+            "string",
+            "integer",
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "The token from control_token_env or control_token_file (16 or more characters)."
+      }
+    }
+  },
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "operationId": "health",
+        "summary": "Liveness: the controller runs (a halted controller is live).",
+        "responses": {
+          "200": {
+            "description": "Live.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not live.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/health/ready": {
+      "get": {
+        "operationId": "ready",
+        "summary": "Readiness: Gateway is logged in and its API socket answered a handshake.",
+        "responses": {
+          "200": {
+            "description": "Ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/openapi.json": {
+      "get": {
+        "operationId": "openapi",
+        "summary": "This document.",
+        "responses": {
+          "200": {
+            "description": "The OpenAPI document.",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
+      }
+    },
+    "/v1/status": {
+      "get": {
+        "operationId": "status",
+        "summary": "Controller status, agents and recovery phase.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The controller has not saved a status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/metrics": {
+      "get": {
+        "operationId": "metrics",
+        "summary": "Prometheus text metrics (state, recovery, counters, agent heartbeat and heap).",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Prometheus text exposition format 0.0.4.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/control": {
+      "post": {
+        "operationId": "control",
+        "summary": "Queue a command: stop, restart, soft_restart, export_logs, reconnect_account, reconnect_data, reload or pause. A failed command is reported as an output event.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ControlRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Queued."
+          },
+          "401": {
+            "description": "No valid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The controller is not running, or soft_restart before Gateway is ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/config": {
+      "get": {
+        "operationId": "config",
+        "summary": "The effective settings: defaults, file, API settings, flags and IBKIT_* variables.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The settings cannot be read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateConfig",
+        "summary": "Save settings and start a new Gateway session with them. Nothing is saved when the result is invalid.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfigUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The new settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "An unknown key, state_dir, or an invalid result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A key that the API never sets (programs, credential sources, the control API, VNC), or a risky value without control_api_full_access.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A flag or IBKIT_* variable sets the key, or the controller is not running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "clearConfig",
+        "summary": "Remove every setting saved through the API, so the file, flags and variables apply again, and reload.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The new settings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The controller is not running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/credentials": {
+      "put": {
+        "operationId": "setCredentials",
+        "summary": "Save the IBKR username and password as 0600 files in state_dir/credentials and reload.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredentialsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Saved."
+          },
+          "400": {
+            "description": "An empty or multiline value.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A flag sets the credential files, or the controller is not running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/totp": {
+      "put": {
+        "operationId": "setTotpSecret",
+        "summary": "Save the base32 Mobile Authenticator secret and reload; codes are then entered at login.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TotpRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Saved."
+          },
+          "400": {
+            "description": "The secret is not base32.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A flag sets totp_secret_file, or the controller is not running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "clearTotpSecret",
+        "summary": "Remove the saved secret and return to IB Key approval on the phone.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed."
+          },
+          "401": {
+            "description": "No valid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A flag sets totp_secret_file, or the controller is not running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/events": {
+      "get": {
+        "operationId": "events",
+        "summary": "WebSocket: one JSON text message per controller event from the moment of connection.",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "description": "Each message is an Event. The `event` field names its kind.",
+        "responses": {
+          "101": {
+            "description": "Switching to WebSocket; messages are Event objects.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Event"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No valid bearer token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {
+    "alert": {
+      "post": {
+        "operationId": "alert",
+        "summary": "Sent to alert_webhook_url when Gateway goes down, comes back, halts, exhausts its recovery budget, or the controller fails.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Alert"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Any 2xx status accepts the alert; others are retried after 2, 10 and 30 seconds."
+          }
+        }
+      }
+    }
+  }
+}

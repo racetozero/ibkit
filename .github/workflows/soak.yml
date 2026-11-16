@@ -1,0 +1,63 @@
+name: Soak
+
+# Long-running resilience test with a real paper account (scripts/soak.sh).
+# It needs a self-hosted runner with the label `ibkit-soak` that has IB
+# Gateway installed, Xvfb (Linux) and jq. Set the repository variables
+# IBKIT_SOAK_ENABLED=true and IBKIT_SOAK_EXECUTABLE (the Gateway launcher), and
+# the secrets IBKIT_SOAK_USERNAME and IBKIT_SOAK_PASSWORD (and optionally
+# IBKIT_SOAK_TOTP_SECRET, the Mobile Authenticator secret) of a dedicated paper
+# account. GitHub ends self-hosted jobs after 5 days.
+on:
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: Test duration in hours
+        default: '48'
+      fault-every-mins:
+        description: Minutes between injected faults
+        default: '180'
+  schedule:
+    # Monday 06:00 UTC: 48 hours before IBKR's weekend reset window, during
+    # which recovery waits (a fault then could not recover in time).
+    - cron: '0 6 * * 1'
+
+jobs:
+  soak:
+    if: vars.IBKIT_SOAK_ENABLED == 'true'
+    runs-on: [self-hosted, ibkit-soak]
+    timeout-minutes: 7200
+    concurrency: ibkit-soak
+    env:
+      IBKIT_EXECUTABLE: ${{ vars.IBKIT_SOAK_EXECUTABLE }}
+      IBKIT_TRADING_MODE: paper
+      IB_USERNAME: ${{ secrets.IBKIT_SOAK_USERNAME }}
+      IB_PASSWORD: ${{ secrets.IBKIT_SOAK_PASSWORD }}
+      # Optional: without it, each login waits for IB Key approval.
+      IB_TOTP_SECRET: ${{ secrets.IBKIT_SOAK_TOTP_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo build --release --locked -p ibkit-cli
+      - name: Configure the controller
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then library=libibgateway_agent.dylib display=false; else library=libibgateway_agent.so display=true; fi
+          {
+            echo "IBKIT_AGENT=$GITHUB_WORKSPACE/target/release/$library"
+            echo "IBKIT_MANAGE_DISPLAY=$display"
+            echo "IBKIT_STATE_DIR=$RUNNER_TEMP/ibkit-soak/state"
+            echo "IBKIT_SETTINGS_DIR=$RUNNER_TEMP/ibkit-soak/settings"
+          } >> "$GITHUB_ENV"
+      - name: Run the soak test
+        run: >-
+          scripts/soak.sh
+          --hours "${{ inputs.hours || '48' }}"
+          --fault-every-mins "${{ inputs.fault-every-mins || '180' }}"
+          --report "${{ runner.temp }}/soak.jsonl"
+          --log "${{ runner.temp }}/soak-controller.log"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soak-report
+          path: |
+            ${{ runner.temp }}/soak.jsonl
+            ${{ runner.temp }}/soak-controller.log
+          retention-days: 14

@@ -1,0 +1,17 @@
+Gateway is installed with one replica.
+
+The Secret {{ .Values.credentials.existingSecret }} must exist in this namespace.
+Approve each IB Key request on your phone. Watch the controller events:
+
+  kubectl logs deployment/{{ include "ibkit.name" . }} -f
+
+The API service is {{ include "ibkit.name" . }}:{{ .Values.gateway.apiPort }}.
+The default NetworkPolicy denies incoming API traffic. Set networkPolicy.ingress
+to allow the client pods. Gateway sees every client of the controller's API
+forwarder as 127.0.0.1, so its trusted-IP setting has no effect: limit clients
+with networkPolicy.ingress (and gateway.apiAllowedSources).
+
+State and Gateway settings are stored in /var/lib/ibkit.
+{{- if .Values.controlApi.enabled }}
+The control API is {{ include "ibkit.name" . }}:{{ .Values.controlApi.port }} (bearer token from Secret {{ .Values.controlApi.existingSecret }}).
+{{- end }}

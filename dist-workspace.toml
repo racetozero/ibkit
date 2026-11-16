@@ -1,0 +1,54 @@
+[workspace]
+members = ["cargo:."]
+# One release app: the ibkit binary and, as the package's library, the JVM
+# agent it loads into Gateway. The library crates and SDKs are published by
+# .github/workflows/publish-packages.yml.
+packages = ["ibkit-cli"]
+
+# Config for 'dist'
+[dist]
+# The preferred dist version to use in CI (Cargo.toml SemVer syntax)
+cargo-dist-version = "0.32.0"
+# CI backends to support
+ci = "github"
+# Where to host releases
+hosting = "github"
+# The agent loads into Gateway's JVM, so only targets that IBKR ships Gateway
+# for (glibc Linux, macOS, Windows x64) can use it.
+targets = [
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-unknown-linux-gnu",
+  "x86_64-pc-windows-msvc",
+]
+# install.sh and install.ps1 in the repository install release archives;
+# dist writes the Homebrew formula.
+installers = ["homebrew"]
+# Homebrew tap that receives the generated formula (secret HOMEBREW_TAP_TOKEN)
+tap = "racetozero/homebrew-tap"
+# Pack the agent (the package's cdylib) next to the binary, and install it
+# with the formula.
+package-libraries = ["cdylib"]
+install-libraries = ["cdylib"]
+# Publish jobs to run in CI. crates.io, PyPI, npm and GHCR are in
+# publish-packages.yml, a separate workflow on the same tag: PyPI trusted
+# publishing does not work in a reusable workflow, which a dist publish job is.
+publish-jobs = ["homebrew"]
+# The archive format to use for non-windows builds (defaults .tar.xz)
+unix-archive = ".tar.gz"
+# The archive format to use for windows builds (defaults .zip)
+windows-archive = ".zip"
+# Whether to install an updater program
+install-updater = false
+# Which actions to run on pull requests
+pr-run-mode = "plan"
+# Supported native runner for macOS ARM64 (as in kiss).
+github-custom-runners = { "aarch64-apple-darwin" = "macos-15" }
+# Create the GitHub release after the Homebrew formula is published, so a
+# failed publish leaves no release behind.
+create-release = true
+github-release = "announce"
+# Whether to enable GitHub Attestations
+github-attestations = true
+github-attestations-phase = "announce"

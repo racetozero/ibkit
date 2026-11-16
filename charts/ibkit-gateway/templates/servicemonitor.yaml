@@ -1,0 +1,24 @@
+{{- if .Values.controlApi.serviceMonitor.enabled }}
+{{- if not .Values.controlApi.enabled }}
+{{- fail "controlApi.serviceMonitor.enabled needs controlApi.enabled: the metrics are served by the control API." }}
+{{- end }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "ibkit.name" . }}
+  labels:
+    {{- include "ibkit.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "ibkit.selector" . | nindent 6 }}
+  endpoints:
+    - port: control
+      path: /v1/metrics
+      interval: {{ .Values.controlApi.serviceMonitor.interval }}
+      authorization:
+        type: Bearer
+        credentials:
+          name: {{ .Values.controlApi.existingSecret | quote }}
+          key: {{ .Values.controlApi.tokenKey | quote }}
+{{- end }}

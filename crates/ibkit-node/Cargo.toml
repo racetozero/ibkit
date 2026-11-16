@@ -1,0 +1,34 @@
+# Not a member of the root workspace: a Node addon resolves Node's symbols at
+# load time, so its test harness cannot link outside Node. The empty
+# `[workspace]` table stops Cargo from walking up to the root manifest.
+[workspace]
+
+[package]
+name = "ibkit-node"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/racetozero/ibkit"
+description = "Node.js and Bun bindings for ibkit (TWS API, Web API, FIX)"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ibkit = { path = "../ibkit" }
+ibkit-fix = { path = "../ibkit-fix" }
+ibkit-web = { path = "../ibkit-web" }
+napi = { version = "2", default-features = false, features = ["napi8", "tokio_rt", "serde-json", "async"] }
+napi-derive = "2"
+parking_lot = "0.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "net"] }
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = "symbols"

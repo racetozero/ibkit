@@ -1,0 +1,264 @@
+name: Publish packages
+
+# Push a tag vX.Y.Z whose version matches Cargo.toml, crates/ibkit-py,
+# crates/ibkit-node/package.json and charts/ibkit-gateway/Chart.yaml. The
+# same tag starts release.yml (cargo-dist), which builds the ibkit archives,
+# publishes the Homebrew formula and creates the GitHub release; this
+# workflow publishes the crates, the Python and Node packages, the image and
+# the chart.
+#
+# Secrets: CARGO_REGISTRY_TOKEN (crates.io) and NPM_TOKEN (npm). PyPI uses
+# trusted publishing: add this workflow (publish-packages.yml) as a trusted
+# publisher of the `ibkit` project, with the environment `pypi`. The image
+# and the chart go to this repository's GitHub Container Registry with
+# GITHUB_TOKEN.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Build everything, publish nothing
+        type: boolean
+        default: true
+
+env:
+  CARGO_TERM_COLOR: always
+  PUBLISH: ${{ github.event_name == 'push' || !inputs.dry-run }}
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          node=$(jq -r .version crates/ibkit-node/package.json)
+          py=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/ibkit-py/Cargo.toml | head -1)
+          chart=$(sed -n 's/^version: //p' charts/ibkit-gateway/Chart.yaml)
+          app=$(sed -n 's/^appVersion: "\(.*\)"/\1/p' charts/ibkit-gateway/Chart.yaml)
+          for other in "$node" "$py" "$chart" "$app"; do
+            if [ "$other" != "$version" ]; then
+              echo "Versions differ: Cargo.toml $version, package.json $node, ibkit-py $py, Chart.yaml $chart/$app. Set them all to one version." >&2
+              exit 1
+            fi
+          done
+          if [ "${GITHUB_REF_TYPE}" = tag ] && [ "${GITHUB_REF_NAME}" != "v$version" ]; then
+            echo "The tag ${GITHUB_REF_NAME} does not match the version $version. Tag v$version instead." >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  crates:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Publish the workspace crates in dependency order
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ "$PUBLISH" = true ]; then
+            cargo publish --workspace --locked
+          else
+            cargo publish --workspace --locked --dry-run
+          fi
+
+  wheels:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: x86_64 }
+          - { os: ubuntu-latest, target: aarch64 }
+          - { os: macos-latest, target: aarch64 }
+          - { os: macos-latest, target: x86_64 }
+          - { os: windows-latest, target: x64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
+        with:
+          working-directory: crates/ibkit-py
+          target: ${{ matrix.target }}
+          manylinux: auto
+          args: --release --locked --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}-${{ matrix.target }}
+          path: crates/ibkit-py/dist
+
+  sdist:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
+        with:
+          working-directory: crates/ibkit-py
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: crates/ibkit-py/dist
+
+  pypi:
+    needs: [wheels, sdist]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: '{wheel-*,sdist}'
+          merge-multiple: true
+          path: dist
+      - if: env.PUBLISH == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  node-addon:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, target: aarch64-apple-darwin, platform: darwin-arm64, test: true }
+          - { os: macos-latest, target: x86_64-apple-darwin, platform: darwin-x64, test: false }
+          # Ubuntu 22.04 has glibc 2.35, so the addon loads on older distributions too.
+          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, platform: linux-x64-gnu, test: true }
+          - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu, platform: linux-arm64-gnu, test: true }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc, platform: win32-x64-msvc, test: true }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: crates/ibkit-node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: oven-sh/setup-bun@v2
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Collect the addon
+        run: |
+          mkdir -p "addon/${{ matrix.platform }}"
+          for file in libibkit_node.dylib libibkit_node.so ibkit_node.dll; do
+            source="target/${{ matrix.target }}/release/$file"
+            if [ -f "$source" ]; then cp "$source" "addon/${{ matrix.platform }}/ibkit.node"; fi
+          done
+          test -f "addon/${{ matrix.platform }}/ibkit.node"
+      - name: Test the addon against the fake TWS server
+        if: matrix.test
+        run: |
+          cp "addon/${{ matrix.platform }}/ibkit.node" ibkit.node
+          bun install --frozen-lockfile
+          bun test test/ib.test.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: node-${{ matrix.platform }}
+          path: crates/ibkit-node/addon
+
+  npm:
+    needs: node-addon
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: node-*
+          merge-multiple: true
+          path: addons
+      - name: Build the TypeScript bundle
+        working-directory: crates/ibkit-node
+        run: bun install --frozen-lockfile && bun run build:ts
+      - run: bun scripts/node-packages.ts addons npm
+      - name: Publish the platform packages, then @ibkit/node
+        env:
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          flags=(--access public)
+          if [ "$PUBLISH" != true ]; then flags+=(--dry-run); fi
+          for dir in npm/*/; do
+            if [ "$dir" != npm/main/ ]; then (cd "$dir" && bun publish "${flags[@]}"); fi
+          done
+          (cd npm/main && bun publish "${flags[@]}")
+
+  image:
+    needs: version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/ibkit-gateway
+          tags: |
+            type=semver,pattern={{version}},value=v${{ needs.version.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.version.outputs.version }}
+      # A release image holds one known Gateway installer: set the repository
+      # variables GATEWAY_SHA256_AMD64 and GATEWAY_SHA256_ARM64 to the SHA-256
+      # of IBKR's stable standalone installers (`sha256sum
+      # ibgateway-stable-standalone-linux-*.sh`). A changed installer then
+      # fails the build instead of shipping silently.
+      - name: Gateway installer hashes are set
+        if: env.PUBLISH == 'true'
+        env:
+          AMD64: ${{ vars.GATEWAY_SHA256_AMD64 }}
+          ARM64: ${{ vars.GATEWAY_SHA256_ARM64 }}
+        run: |
+          if [ -z "$AMD64" ] || [ -z "$ARM64" ]; then
+            echo "::error::Set the repository variables GATEWAY_SHA256_AMD64 and GATEWAY_SHA256_ARM64 to the SHA-256 of IBKR's stable standalone Gateway installers, then run the release again."
+            exit 1
+          fi
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          platforms: linux/amd64,linux/arm64
+          push: ${{ env.PUBLISH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GATEWAY_CHANNEL=stable
+            GATEWAY_SHA256_AMD64=${{ vars.GATEWAY_SHA256_AMD64 }}
+            GATEWAY_SHA256_ARM64=${{ vars.GATEWAY_SHA256_ARM64 }}
+
+  chart:
+    needs: [version, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4.3.0
+      - run: helm lint charts/ibkit-gateway
+      - run: helm package charts/ibkit-gateway --destination chart
+      - name: Push the chart to ghcr.io
+        if: env.PUBLISH == 'true'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io --username "${{ github.actor }}" --password-stdin
+          helm push chart/ibkit-gateway-${{ needs.version.outputs.version }}.tgz "oci://ghcr.io/${{ github.repository_owner }}/charts"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chart
+          path: chart

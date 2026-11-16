@@ -1,0 +1,47 @@
+# cargo-nextest configuration. Run `cargo nextest run --workspace`.
+# Doctests do not run under nextest; run `cargo test --workspace --doc` too.
+
+[profile.default]
+# The ibkit-cli JVM tests need a JDK and a display. Run them with the
+# `full` profile (see scripts/jvm-smoke.sh).
+default-filter = 'not (package(ibkit-cli) & binary(jvm))'
+# Network tests talk to in-process fake servers; a test still running after
+# 3 x 10 s is hung (for example a waited-for message that never came) and is
+# killed so the run ends with a clear failure.
+slow-timeout = { period = "10s", terminate-after = 3 }
+fail-fast = false
+
+[profile.ci]
+default-filter = 'not (package(ibkit-cli) & binary(jvm))'
+slow-timeout = { period = "15s", terminate-after = 4 }
+fail-fast = false
+failure-output = "immediate-final"
+status-level = "fail"
+
+[profile.ci.junit]
+path = "junit.xml"
+
+[profile.full]
+default-filter = 'all()'
+fail-fast = false
+
+# Two supervision tests wait out the 120 s crash grace and a heartbeat
+# stall. Overrides apply in order, so these come before the general one.
+[[profile.default.overrides]]
+filter = 'package(ibkit-gateway) & binary(supervision) & (test(one_heartbeat_gap) | test(a_crashed_jvm))'
+slow-timeout = { period = "60s", terminate-after = 4 }
+
+[[profile.ci.overrides]]
+filter = 'package(ibkit-gateway) & binary(supervision) & (test(one_heartbeat_gap) | test(a_crashed_jvm))'
+slow-timeout = { period = "60s", terminate-after = 4 }
+
+# The ibkit tests start and stop local processes; give them the time
+# limit they used before the merge.
+[[profile.default.overrides]]
+filter = 'package(ibkit-gateway) | package(ibkit-gateway-core) | package(ibkit-cli)'
+slow-timeout = { period = "30s", terminate-after = 4 }
+retries = 0
+
+[[profile.ci.overrides]]
+filter = 'package(ibkit-gateway) | package(ibkit-gateway-core) | package(ibkit-cli)'
+slow-timeout = { period = "30s", terminate-after = 4 }

@@ -1,0 +1,254 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          # On Windows the ibkit tests cover the platform layer
+          # (tests/windows.rs); the shell-script lifecycle tests are Unix only.
+          - os: ubuntu-latest
+            scope: --workspace --features ibkit-gateway/paper-tests
+          - os: macos-latest
+            scope: --workspace --features ibkit-gateway/paper-tests
+          - os: windows-latest
+            scope: --workspace
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Keep local agent files out of Git
+        if: runner.os != 'Windows'
+        run: |
+          if git ls-files | grep -E '(^|/)\.agent/|(^|/)(AGENTS|CLAUDE)\.md$'; then
+            echo 'Local agent files must not be tracked' >&2
+            exit 1
+          fi
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy ${{ matrix.scope }} --all-targets -- -D warnings
+      - name: Test
+        run: cargo nextest run ${{ matrix.scope }} --profile ci
+      - name: Doctests
+        run: cargo test ${{ matrix.scope }} --doc
+      - name: Stress the networked tests
+        if: runner.os == 'Linux'
+        run: cargo nextest run --workspace --profile ci --stress-count 20 -E 'package(ibkit) | package(ibkit-tws) | package(ibkit-fix) | package(ibkit-web)'
+      - name: Test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ matrix.os }}
+          path: target/nextest/ci/junit.xml
+      - name: Generated Python and TypeScript sources are current
+        if: runner.os == 'Linux'
+        run: |
+          cargo run -q -p ibkit --example dump_defaults > target/defaults.json
+          python3 scripts/gen_python_types.py target/defaults.json
+          python3 scripts/gen_node_client.py
+          python3 scripts/gen_gateway_types.py
+          git diff --exit-code crates/ibkit-py/python/ibkit/_types.py crates/ibkit-py/python/ibkit/_gateway_types.py crates/ibkit-node/ts/types.ts crates/ibkit-node/ts/client_requests.ts crates/ibkit-node/ts/gateway_types.ts
+
+  gateway:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - uses: astral-sh/setup-uv@v6
+      - name: TUI check
+        run: |
+          cargo build --locked -p ibkit-cli
+          uv run scripts/check-tui.py
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: JVM agent tests (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y xvfb xauth libxtst6 libxi6 libxrender1 libfontconfig1 fonts-dejavu-core
+          xvfb-run -a scripts/jvm-smoke.sh
+      - name: JVM agent tests (macOS)
+        if: runner.os == 'macOS'
+        run: scripts/jvm-smoke.sh
+
+  # install.sh and install.ps1 against a local release laid out as cargo-dist
+  # lays it out (ibkit-cli-<target>/ with the binary and the agent).
+  installers:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --locked -p ibkit-cli
+      - name: install.sh
+        if: runner.os == 'Linux'
+        run: |
+          shellcheck install.sh
+          release="$RUNNER_TEMP/releases/download/v0.0.1"
+          dir="$RUNNER_TEMP/ibkit-cli-${{ matrix.target }}"
+          mkdir -p "$release" "$dir"
+          cp target/debug/ibkit target/debug/libibkit_gateway_agent.so "$dir/"
+          tar czf "$release/ibkit-cli-${{ matrix.target }}.tar.gz" -C "$RUNNER_TEMP" "ibkit-cli-${{ matrix.target }}"
+          (cd "$release" && sha256sum "ibkit-cli-${{ matrix.target }}.tar.gz" > "ibkit-cli-${{ matrix.target }}.tar.gz.sha256")
+          IBKIT_VERSION=0.0.1 IBKIT_RELEASES_URL="file://$RUNNER_TEMP/releases" IBKIT_INSTALL_DIR="$RUNNER_TEMP/home/bin" sh install.sh
+          test -f "$RUNNER_TEMP/home/lib/libibkit_gateway_agent.so"
+          "$RUNNER_TEMP/home/bin/ibkit" --version
+          "$RUNNER_TEMP/home/bin/ibkit" gateway config | grep -F "home/bin/../lib/libibkit_gateway_agent.so"
+      - name: install.ps1
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $release = Join-Path $env:RUNNER_TEMP "releases\download\v0.0.1"
+          $dir = Join-Path $env:RUNNER_TEMP "ibkit-cli-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path $release, $dir | Out-Null
+          Copy-Item target\debug\ibkit.exe, target\debug\ibkit_gateway_agent.dll $dir
+          $zip = Join-Path $release "ibkit-cli-${{ matrix.target }}.zip"
+          Compress-Archive -Path $dir -DestinationPath $zip
+          (Get-FileHash -Algorithm SHA256 $zip).Hash + "  ibkit-cli-${{ matrix.target }}.zip" | Set-Content "$zip.sha256"
+          $env:IBKIT_VERSION = "0.0.1"
+          $env:IBKIT_RELEASES_URL = ([Uri](Join-Path $env:RUNNER_TEMP "releases")).AbsoluteUri
+          $env:IBKIT_INSTALL_DIR = Join-Path $env:RUNNER_TEMP "home"
+          powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if (-not (Test-Path (Join-Path $env:IBKIT_INSTALL_DIR "ibkit_gateway_agent.dll"))) { exit 1 }
+          & (Join-Path $env:IBKIT_INSTALL_DIR "ibkit.exe") --version
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+  gateway-helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4.3.0
+      - uses: astral-sh/setup-uv@v6
+      - run: helm lint charts/ibkit-gateway
+      - run: scripts/check-chart.sh
+
+  gateway-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          platforms: linux/amd64,linux/arm64
+          push: false
+      - run: docker build --target verify -t ibkit-verify .
+      - run: docker run --rm ibkit-verify
+      - run: docker build --target runtime -t ibkit-runtime .
+      - run: scripts/container-smoke.sh ibkit-runtime
+
+  python:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ['3.11', '3.13']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: crates/ibkit-py
+      - uses: astral-sh/setup-uv@v6
+      - name: Ruff
+        run: uvx ruff@0.17.5 check crates/ibkit-py scripts
+      - name: Build and test
+        working-directory: crates/ibkit-py
+        run: |
+          uv venv --python ${{ matrix.python }} .venv
+          uv pip install --python .venv maturin pytest pytest-asyncio
+          PYO3_PYTHON=.venv/bin/python cargo clippy --all-targets -- -D warnings
+          .venv/bin/maturin develop
+          .venv/bin/pytest -q
+      - name: Types
+        working-directory: crates/ibkit-py
+        run: |
+          (cd ../.. && crates/ibkit-py/.venv/bin/python scripts/gen_python_stub.py)
+          git diff --exit-code python/ibkit/_ibkit.pyi
+          uvx pyright@1.1.408 --pythonpath .venv/bin/python python/ibkit
+          # As a user sees the package: an installed wheel, checked from outside the repository.
+          .venv/bin/maturin build -q -o "$RUNNER_TEMP/dist"
+          uv venv --python ${{ matrix.python }} "$RUNNER_TEMP/wheel"
+          uv pip install --python "$RUNNER_TEMP/wheel" "$RUNNER_TEMP"/dist/*.whl pyright==1.1.408
+          cp tests/typing_check.py "$RUNNER_TEMP/"
+          cd "$RUNNER_TEMP"
+          export VIRTUAL_ENV="$RUNNER_TEMP/wheel" PATH="$RUNNER_TEMP/wheel/bin:$PATH"
+          pyright typing_check.py
+          pyright --verifytypes ibkit --ignoreexternal
+
+  node:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: crates/ibkit-node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            crates/ibkit-node
+            .
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: bun install --frozen-lockfile
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Controller for the GatewayClient test
+        if: runner.os != 'Windows'
+        working-directory: .
+        run: cargo build --locked -p ibkit-cli
+      - run: bun run build
+      - run: bun run typecheck
+      - run: bun test
+      - name: Load the bundle in Node
+        shell: bash
+        run: |
+          node --input-type=module -e "import('./dist/index.js').then((m) => console.log('addon', m.version()))"
+          # @ibkit/node/gateway must load without the native addon.
+          mv ibkit.node ibkit.node.aside
+          node --input-type=module -e "import('./dist/gateway.js').then((m) => new m.GatewayClient('http://127.0.0.1:1', 'x'.repeat(16)))"
+          mv ibkit.node.aside ibkit.node

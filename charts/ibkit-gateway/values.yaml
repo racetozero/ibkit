@@ -1,0 +1,110 @@
+image:
+  # Built by .github/workflows/publish-packages.yml; use your own registry for a
+  # locally built image.
+  repository: ghcr.io/racetozero/ibkit-gateway
+  # Empty: the chart's appVersion, so the image follows a chart release.
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+credentials:
+  existingSecret: ibkit-credentials
+  usernameKey: username
+  passwordKey: password
+  # Optional key in the same Secret with the base32 Mobile Authenticator
+  # (TOTP) secret. Empty: second-factor login waits for IB Key approval.
+  totpSecretKey: ""
+gateway:
+  tradingMode: paper
+  apiPort: 4002
+  readOnlyApi: false
+  apiLog: true
+  allowRemoteApi: false
+  incomingConnection: manual
+  forwardPort: 4004
+  # Retry transient faults; recoveryAttempts 0 means no limit. Faults that
+  # need an operator halt the controller (the pod stays live, not ready).
+  autoRecover: true
+  recoveryAttempts: 0
+  recoveryDelaySeconds: 60
+  recoveryMaxDelaySeconds: 1800
+  apiProbeIntervalSeconds: 30
+  apiFailureTimeoutSeconds: 180
+  region: america
+  bypassOrderPrecautions: true
+  acceptOrderWarnings: true
+  existingSession: refuse
+  exportLogs: false
+  restartTime: "23:45"
+  timezone: America/New_York
+  initializationTimeoutSeconds: 900
+  softRestartTimeoutSeconds: 600
+  shutdownTimeoutSeconds: 30
+  secondFactorTimeoutSeconds: 150
+  secondFactorAttempts: 3
+  unknownDialogTimeoutSeconds: 120
+  passkeyAuthenticate: false
+  # Maximum Java heap in MiB; empty keeps Gateway's default (768).
+  javaHeapMb: null
+  # Master API client ID; empty leaves Gateway's setting unchanged.
+  masterClientId: null
+  # Comma-separated addresses or CIDR ranges that may use the API port;
+  # empty allows every source that the NetworkPolicy admits.
+  apiAllowedSources: ""
+  # Consecutive failed logins (unknown login dialog, unanswered second
+  # factor) before retries stop to prevent an IBKR lock-out; 0: no limit.
+  maxLoginFailures: 10
+  # Click OK on "Your password will expire in N day(s)".
+  dismissPasswordExpiryWarning: true
+  # Weekly local times, for example "Fri 23:00": pause Gateway until restart
+  # (closedownAt), or log in again (coldRestartAt, for example "Sun 07:05",
+  # when someone can approve IB Key). Empty: off.
+  closedownAt: ""
+  coldRestartAt: ""
+# VNC access to the virtual display, for account tasks and unknown dialogs.
+# x11vnc listens on the pod's loopback only: use
+# `kubectl port-forward deployment/<name> 5900` and a VNC viewer. The
+# password is key `passwordKey` of Secret `existingSecret`.
+vnc:
+  enabled: false
+  port: 5900
+  existingSecret: ""
+  passwordKey: password
+# REST and WebSocket control API (status, commands, settings, credentials,
+# TOTP secret, events). The bearer token is key `tokenKey` of Secret
+# `existingSecret` (16 or more characters).
+controlApi:
+  enabled: false
+  port: 5800
+  existingSecret: ""
+  tokenKey: token
+  # A Prometheus Operator ServiceMonitor that scrapes /v1/metrics with the
+  # control API token. Needs controlApi.enabled and the monitoring.coreos.com CRDs.
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+# Alerts (down, recovered, halted, exhausted, controller_failed) as a JSON
+# POST to a webhook. The URL often holds a secret (Slack, Mattermost), so it
+# comes from a Secret key.
+alerts:
+  existingSecret: ""
+  urlKey: url
+persistence:
+  enabled: true
+  size: 2Gi
+  storageClass: ""
+  existingClaim: ""
+resources:
+  requests:
+    cpu: 250m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+networkPolicy:
+  enabled: true
+  # Set a nonempty selector to allow API clients from the same namespace.
+  # With the default empty list, all inbound API traffic is denied.
+  ingress: []
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -1,0 +1,44 @@
+{
+  "name": "@ibkit/node",
+  "version": "0.1.0",
+  "description": "Interactive Brokers TWS API, Web API, FIX and ibkit control for Node.js and Bun, on the ibkit Rust core",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/racetozero/ibkit.git",
+    "directory": "crates/ibkit-node"
+  },
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./gateway": {
+      "types": "./dist/gateway.d.ts",
+      "import": "./dist/gateway.js"
+    }
+  },
+  "files": [
+    "dist",
+    "ibkit.node"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build:native": "bun build.ts",
+    "build:native:debug": "bun build.ts --debug",
+    "build:ts": "bun build ts/index.ts ts/gateway.ts --target node --format esm --splitting --outdir dist --external ./ibkit.node && tsc -p tsconfig.json --emitDeclarationOnly",
+    "build": "bun run build:native && bun run build:ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "1.2.20",
+    "@types/node": "22.15.21",
+    "typescript": "5.8.3"
+  }
+}

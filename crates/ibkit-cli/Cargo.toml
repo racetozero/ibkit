@@ -1,0 +1,51 @@
+[package]
+name = "ibkit-cli"
+description = "The ibkit command line tool and the JVM agent it loads into IB Gateway"
+version.workspace = true
+edition.workspace = true
+license = "Apache-2.0"
+repository.workspace = true
+rust-version.workspace = true
+homepage = "https://github.com/racetozero/ibkit/tree/main/crates/ibkit-gateway#readme"
+default-run = "ibkit"
+
+[package.metadata.dist]
+# brew install racetozero/tap/ibkit
+formula = "ibkit"
+
+# The JVM agent is this package's library, so a release archive packs the
+# ibkit binary and the agent it loads together (cargo-dist packs one
+# package's binaries and libraries).
+[lib]
+name = "ibkit_gateway_agent"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "ibkit"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+clap.workspace = true
+crossterm = { version = "0.28", features = ["event-stream"] }
+futures-util = "0.3"
+ibkit-gateway.workspace = true
+ibkit-gateway-core.workspace = true
+jni.workspace = true
+jvmti-sys.workspace = true
+ratatui = "0.29"
+reqwest.workspace = true
+self-replace.workspace = true
+semver.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["process", "signal", "fs"] }
+toml.workspace = true
+
+[dev-dependencies]
+ibkit-gateway-client.workspace = true
