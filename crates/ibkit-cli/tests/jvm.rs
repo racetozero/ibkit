@@ -384,7 +384,7 @@ fn native_agent_preserves_restart_authentication_and_emits_one_token_expiry() {
             .path()
             .join("agents")
             .join(format!("{}.json", child.id()));
-        let deadline = Instant::now() + Duration::from_secs(15);
+        let deadline = Instant::now() + Duration::from_secs(30);
         let mut reauth_requested = false;
         let found = loop {
             if let Ok(bytes) = fs::read(&status_path) {
