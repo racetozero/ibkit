@@ -305,4 +305,4 @@ Second factor: IB Key waits for approval on the phone. With the Mobile Authentic
 
 Unknown dialogs are never clicked. Gateway's generic "Gateway" dialog can be its login progress indicator, where OK cancels the login. An unknown modal dialog that still blocks authentication after `unknown_dialog_timeout_secs` (120 s) produces UnknownMessageWindowDetected. When IBKR does not answer two login requests (`AuthTimeoutMonitor-CCP: Timeout!` in `launcher.log`), the agent reports AuthenticationNotAnswered: usually another session holds the user's slot. This result does not retry automatically, because another login would be dropped the same way. The library does not retry rejected credentials forever or choose a weekend retry time for the caller.
 
-License: Apache-2.0. Interactive Brokers Gateway is proprietary software. Obtain and use it under the vendor's terms; it is not part of the Rust source license.
+License: MIT. Interactive Brokers Gateway is proprietary software. Obtain and use it under the vendor's terms; it is not part of the Rust source license.

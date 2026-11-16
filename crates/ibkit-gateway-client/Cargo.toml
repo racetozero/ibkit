@@ -3,7 +3,7 @@ name = "ibkit-gateway-client"
 description = "Client for the ibkit gateway control API (REST and WebSocket)"
 version.workspace = true
 edition.workspace = true
-license = "Apache-2.0"
+license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 

@@ -8,7 +8,7 @@
 [![npm](https://img.shields.io/npm/v/%40ibkit%2Fnode?label=npm)](https://www.npmjs.com/package/@ibkit/node)
 [![PyPI](https://img.shields.io/pypi/v/ibkit?label=PyPI)](https://pypi.org/project/ibkit/)
 [![Python](https://img.shields.io/pypi/pyversions/ibkit)](https://pypi.org/project/ibkit/)
-[![License: MIT and Apache-2.0](https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-blue)](#license)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](#license)
 
 **Trade with Interactive Brokers from Python, TypeScript or Rust, and keep IB
 Gateway logged in without touching it.**
@@ -411,10 +411,7 @@ connects to IB.
 
 ## License
 
-The client libraries (`ibkit`, `ibkit-tws`, `ibkit-web`, `ibkit-fix`, the Python
-and Node packages) are MIT. The Gateway crates (`ibkit-cli`,
-`ibkit-gateway`, `ibkit-gateway-core`, `ibkit-gateway-client`) are
-Apache-2.0.
+ibkit is licensed under the MIT License. See [LICENSE](LICENSE).
 
 ibkit is not affiliated with or endorsed by Interactive Brokers. IB, IBKR and IB
 Gateway are names of Interactive Brokers LLC. IB Gateway is IBKR's proprietary

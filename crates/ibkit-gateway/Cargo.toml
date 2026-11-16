@@ -3,7 +3,7 @@ name = "ibkit-gateway"
 description = "IB Gateway supervisor: login, recovery, control API and settings"
 version.workspace = true
 edition.workspace = true
-license = "Apache-2.0"
+license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
