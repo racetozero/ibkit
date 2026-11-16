@@ -19,11 +19,13 @@ RUN set -eu; rust_target=$(cat /out/rust-target); \
     cp "target/$rust_target/release/ibkit" "target/$rust_target/release/libibkit_gateway_agent.so" /out/
 
 FROM build AS test-build
+# Cargo's output layout changes between releases, so ask Cargo where the test binary is.
 RUN set -eu; rust_target=$(cat /out/rust-target); \
     CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc \
     CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
-      cargo test --locked --target "$rust_target" -p ibkit-cli --test jvm --no-run; \
-    find "target/$rust_target/debug/deps" -maxdepth 1 -type f -name 'jvm-*' -executable -exec cp '{}' /out/jvm-tests \;
+      cargo test --locked --target "$rust_target" -p ibkit-cli --test jvm --no-run --message-format=json > /tmp/test-build.json; \
+    jvm_tests=$(sed -n 's/.*"executable":"\([^"]*\)".*/\1/p' /tmp/test-build.json); \
+    test -n "$jvm_tests"; cp "$jvm_tests" /out/jvm-tests
 
 FROM debian:bookworm-slim AS gateway
 ARG TARGETARCH
