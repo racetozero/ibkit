@@ -29,7 +29,8 @@ targets = [
 # install.sh and install.ps1 in the repository install release archives;
 # dist writes the Homebrew formula.
 installers = ["homebrew"]
-# Homebrew tap that receives the generated formula (secret HOMEBREW_TAP_TOKEN)
+# Homebrew tap that receives the generated formula (secret HOMEBREW_TAP_DEPLOY_KEY,
+# a write deploy key on the tap; release.yml checks the tap out over SSH)
 tap = "racetozero/homebrew-tap"
 # Pack the agent (the package's cdylib) next to the binary, and install it
 # with the formula.
