@@ -563,7 +563,7 @@ dependencies = [
 
 [[package]]
 name = "ibkit"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "ibkit-tws",
  "parking_lot",
@@ -576,7 +576,7 @@ dependencies = [
 
 [[package]]
 name = "ibkit-fix"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -593,7 +593,7 @@ dependencies = [
 
 [[package]]
 name = "ibkit-gateway-client"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "futures-util",
@@ -608,7 +608,7 @@ dependencies = [
 
 [[package]]
 name = "ibkit-gateway-core"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -622,7 +622,7 @@ dependencies = [
 
 [[package]]
 name = "ibkit-py"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "ibkit",
@@ -639,7 +639,7 @@ dependencies = [
 
 [[package]]
 name = "ibkit-tws"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "fast-float2",
  "itoa",
@@ -655,7 +655,7 @@ dependencies = [
 
 [[package]]
 name = "ibkit-web"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "base64 0.22.1",
  "futures-util",
